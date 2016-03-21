@@ -1,0 +1,98 @@
+package project.esip;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+
+import org.ksoap2.SoapEnvelope;
+import org.ksoap2.serialization.SoapObject;
+import org.ksoap2.serialization.SoapSerializationEnvelope;
+import org.ksoap2.transport.HttpTransportSE;
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.w3c.dom.NodeList;
+
+import android.app.ListActivity;
+import android.content.SharedPreferences;
+import android.os.Bundle;
+import android.widget.ListAdapter;
+import android.widget.SimpleAdapter;
+import android.widget.TextView;
+
+public class ViewGroups extends ListActivity {
+
+	private static final String SOAP_ACTION = "http://192.168.1.8:8080/soap/ViewGroupsService";
+	private static final String OPERATION_NAME = "viewGroups";
+	private static final String WSDL_TARGET_NAMESPACE = "urn:ViewGroupsService";
+	private static final String SOAP_ADDRESS = "http://192.168.1.8:8080/soap/servlet/rpcrouter";
+
+	public static final String PREFS_NAME = "UserPrefsFile";
+	SharedPreferences value;
+
+	String reply, userName;
+	
+	TextView resultView;
+
+	ArrayList<HashMap<String, String>> mylist = new ArrayList<HashMap<String, String>>();
+
+	/** Called when the activity is first created. */
+	@Override
+	public void onCreate(Bundle savedInstanceState) {
+		super.onCreate(savedInstanceState);
+		setContentView(R.layout.groupslistplaceholder);
+
+		value = getSharedPreferences(PREFS_NAME, 0);
+		userName = value.getString("unameKey", "Unknown");
+
+		SoapObject request = new SoapObject(WSDL_TARGET_NAMESPACE,
+				OPERATION_NAME);
+		request.addProperty("loginId", userName);
+		SoapSerializationEnvelope envelope = new SoapSerializationEnvelope(
+				SoapEnvelope.VER11);
+		envelope.dotNet = false;
+		envelope.setOutputSoapObject(request);
+		HttpTransportSE httpTransport = new HttpTransportSE(SOAP_ADDRESS);
+
+		try {
+			// httpTransport.debug = true;
+			httpTransport.call(SOAP_ACTION, envelope);
+			// textView.setText("=========" + httpTransport.responseDump);
+			Object response = envelope.getResponse();
+			// result.setText("" + response);
+
+			String xml = "" + response;
+
+			Document doc = XMLfunctions.XMLfromString(xml);
+
+			/*
+			 * int numResults = XMLfunctions.numResults(doc);
+			 * 
+			 * if((numResults <= 0)){ Toast.makeText(SoapProcess.this,
+			 * "No Data Found", Toast.LENGTH_LONG).show(); finish(); }
+			 */
+			NodeList nodes = doc.getElementsByTagName("CD");
+
+			for (int i = 0; i < nodes.getLength(); i++) {
+				HashMap<String, String> map = new HashMap<String, String>();
+
+				Element e = (Element) nodes.item(i);
+				map.put("TITLE", "TITLE: " + XMLfunctions.getValue(e, "TITLE"));
+				map.put("ARTIST",
+						"ARTIST: " + XMLfunctions.getValue(e, "ARTIST"));
+				map.put("COUNTRY",
+						"COUNTRY: " + XMLfunctions.getValue(e, "COUNTRY"));
+				mylist.add(map);
+			}
+
+			ListAdapter adapter = new SimpleAdapter(this, mylist,
+					R.layout.view_groups, new String[] { "TITLE", "ARTIST",
+							"COUNTRY" }, new int[] { R.id.grouptitle,
+							R.id.createdBy });
+
+			setListAdapter(adapter);
+		}
+
+		catch (Exception exception) {
+			result.setText(exception.toString());
+		}
+	}
+}

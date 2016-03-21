@@ -1,0 +1,153 @@
+package project.esip;
+
+import java.io.IOException;
+import java.io.UnsupportedEncodingException;
+import java.net.MalformedURLException;
+import java.util.ArrayList;
+import java.util.HashMap;
+
+import org.apache.http.HttpEntity;
+import org.apache.http.HttpResponse;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.impl.client.DefaultHttpClient;
+import org.apache.http.util.EntityUtils;
+import org.ksoap2.SoapEnvelope;
+import org.ksoap2.serialization.SoapObject;
+import org.ksoap2.serialization.SoapSerializationEnvelope;
+import org.ksoap2.transport.HttpTransportSE;
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.w3c.dom.NodeList;
+
+import android.app.ListActivity;
+import android.content.SharedPreferences;
+import android.os.AsyncTask;
+import android.os.Bundle;
+import android.widget.ListAdapter;
+import android.widget.SimpleAdapter;
+import android.widget.TextView;
+
+public class ViewGroups extends ListActivity {
+
+	private static final String SOAP_ACTION = "http://10.0.2.2:8080/soap/ViewGroupsService";
+	private static final String OPERATION_NAME = "viewGroups";
+	private static final String WSDL_TARGET_NAMESPACE = "urn:ViewGroupsService";
+	private static final String SOAP_ADDRESS = "http://10.0.2.2:8080/soap/servlet/rpcrouter";
+
+	public static final String PREFS_NAME = "UserPrefsFile";
+	SharedPreferences value;
+
+	String reply, userName, xml;
+
+	TextView resultView;
+
+	ArrayList<HashMap<String, String>> mylist = new ArrayList<HashMap<String, String>>();
+
+	/** Called when the activity is first created. */
+	@Override
+	public void onCreate(Bundle savedInstanceState) {
+		super.onCreate(savedInstanceState);
+		setContentView(R.layout.groupslistplaceholder);
+
+		resultView = (TextView) findViewById(R.id.result);
+
+		value = getSharedPreferences(PREFS_NAME, 0);
+		userName = value.getString("unameKey", "Unknown");
+
+		XMLAsyncTask task1 = new XMLAsyncTask();
+		task1.execute();
+
+	}
+
+	class XMLAsyncTask extends AsyncTask<Void, Void, Void> {
+
+		String reply = "";
+
+		@Override
+		protected Void doInBackground(Void... params) {
+			// TODO Auto-generated method stub
+
+			SoapObject request = new SoapObject(WSDL_TARGET_NAMESPACE,
+					OPERATION_NAME);
+			request.addProperty("loginId", userName);
+			SoapSerializationEnvelope envelope = new SoapSerializationEnvelope(
+					SoapEnvelope.VER11);
+			envelope.dotNet = false;
+			envelope.setOutputSoapObject(request);
+			HttpTransportSE httpTransport = new HttpTransportSE(SOAP_ADDRESS);
+
+			try {
+				// httpTransport.debug = true;
+				httpTransport.call(SOAP_ACTION, envelope);
+				// textView.setText("=========" + httpTransport.responseDump);
+				Object server_response = envelope.getResponse();
+				// result.setText("" + response);
+
+				String response = "" + server_response;
+				System.out.println("Server response: " + response);
+
+				if (response.equals("Success")) {
+
+					try {
+						DefaultHttpClient httpClient = new DefaultHttpClient();
+						HttpPost httpPost = new HttpPost(
+								"http://10.0.2.2:8080/esip/esipgroups.xml");
+
+						HttpResponse httpResponse = httpClient
+								.execute(httpPost);
+						HttpEntity httpEntity = httpResponse.getEntity();
+						xml = EntityUtils.toString(httpEntity);
+
+					} catch (UnsupportedEncodingException e) {
+						xml = "<results status=\"error\"><msg>Can't connect to server</msg></results>";
+					}
+
+					catch (MalformedURLException e) {
+						xml = "<results status=\"error\"><msg>Can't connect to server</msg></results>";
+					}
+
+					catch (IOException e) {
+						xml = "<results status=\"error\"><msg>Can't connect to server</msg></results>";
+					}
+					Document doc = XMLfunctions.XMLfromString(xml);
+
+					NodeList nodes = doc.getElementsByTagName("group");
+
+					for (int i = 0; i < nodes.getLength(); i++) {
+						HashMap<String, String> map = new HashMap<String, String>();
+
+						Element e = (Element) nodes.item(i);
+						map.put("GroupName",
+								"Group Name: "
+										+ XMLfunctions
+												.getValue(e, "group_name"));
+						map.put("CreatedBy",
+								"Created By: "
+										+ XMLfunctions
+												.getValue(e, "created_by"));
+						mylist.add(map);
+					}
+				}
+
+			}
+
+			catch (Exception exception) {
+				System.out.println("Exception: " + exception);
+				resultView.setText(exception.toString());
+			}
+		}
+
+		@Override
+		protected void onPostExecute(Void result) {
+			super.onPostExecute(result);
+
+			ListAdapter adapter = new SimpleAdapter(ViewGroups.this, mylist,
+					R.layout.view_groups, new String[] { "GroupName",
+							"CreatedBy" }, new int[] { R.id.grouptitle,
+							R.id.createdBy });
+
+			setListAdapter(adapter);
+		}
+
+	}
+}
